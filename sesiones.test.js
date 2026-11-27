@@ -17,7 +17,7 @@ function base(sesiones) {
   return b;
 }
 
-test('retoma la interrumpida más reciente del mismo canal, nunca una cerrada con /terminar', () => {
+test('retoma la interrumpida más reciente del mismo canal, nunca una cerrada con /taqi parar', () => {
   const b = base({
     terminada: { canalId: 'A', inicio: hace(30), fin: hace(5), cerradaPor: 'comando' },
     caida: { canalId: 'A', inicio: hace(60), latido: hace(20) },

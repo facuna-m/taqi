@@ -1,5 +1,5 @@
 // Estado de cada sesión en sesiones/<dir>/sesion.json: { canal, canalId, inicio, latido, fin?, cerradaPor?, cortes: [{desde, hasta}] }.
-// cerradaPor: 'comando' (/terminar) | 'desconexion' | 'cierre' (Ctrl+C) | 'error' | 'caida' (murió y nadie la retomó en 2 h).
+// cerradaPor: 'comando' (/taqi parar) | 'desconexion' | 'cierre' (Ctrl+C) | 'error' | 'caida' (murió y nadie la retomó en 2 h).
 // Sin "fin" = el proceso murió sin cerrarla.
 const fs = require('node:fs');
 const path = require('node:path');
@@ -28,7 +28,7 @@ function listar(base = BASE) {
 // Sesiones que el proceso no alcanzó a cerrar (sin "fin").
 const sinCerrar = (base = BASE) => listar(base).filter((s) => !s.meta.fin);
 
-// La sesión más reciente del mismo canal que se interrumpió (no se cerró con /terminar) hace menos de 2 h.
+// La sesión más reciente del mismo canal que se interrumpió (no se cerró con /taqi parar) hace menos de 2 h.
 function buscarRetomable(canalId, ahora = new Date(), base = BASE) {
   return listar(base)
     .filter((s) => s.meta.canalId === canalId && s.meta.cerradaPor !== 'comando')

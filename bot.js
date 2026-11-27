@@ -1,11 +1,12 @@
-// Taqi: /transcribir entra a tu canal de voz y transcribe cada frase por persona; /terminar genera el acta.
+// Taqi: /taqi unirse entra a tu canal de voz y transcribe cada frase por persona; /taqi parar genera el acta.
 // Uso: npm run whisper (en otra terminal) y luego npm start.
-const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, Events, MessageFlags, ActivityType } = require('discord.js');
 const { joinVoiceChannel, EndBehaviorType, VoiceConnectionStatus, entersState } = require('@discordjs/voice');
 const OpusScript = require('opusscript');
 const { crearSesion, whisperDisponible } = require('./pipeline');
 const { escribirActa } = require('./acta');
 const { guardarMeta, sinCerrar, buscarRetomable, RETOMAR_MS } = require('./sesiones');
+const { APODO, MENSAJES: M, COMANDOS } = require('./marca');
 
 const { DISCORD_TOKEN, GUILD_ID } = process.env;
 if (!DISCORD_TOKEN || !GUILD_ID) {
@@ -16,14 +17,8 @@ if (!DISCORD_TOKEN || !GUILD_ID) {
 const LATIDO_MS = 15_000; // marca de vida en sesion.json: tras una caída, el hueco empieza aquí
 const SILENCIO_MS = 800; // fin de frase tras este silencio
 const MAX_FRASE_BYTES = 25 * 192000; // 25 s de PCM 48 kHz estéreo: la ventana de Whisper es de 30 s
-const APODO = '🔴 Taqi · transcribiendo';
-const COMANDOS = [
-  { name: 'transcribir', description: 'Taqi empieza a transcribir el canal de voz en el que estás' },
-  { name: 'terminar', description: 'Taqi deja de transcribir y guarda el acta' },
-];
 const hora = (d = new Date()) => d.toLocaleTimeString('es-CL', { hour12: false });
-const hhmm = (d) => hora(d).slice(0, 5);
-const efimero = (content) => ({ content, flags: MessageFlags.Ephemeral });
+const efimero = (embed) => ({ embeds: [embed], flags: MessageFlags.Ephemeral });
 
 let actual = null; // la transcripción en curso (una a la vez)
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates] });
@@ -60,7 +55,7 @@ async function iniciar(canal, canalTexto) {
     selfMute: true,
   });
   try { await entersState(connection, VoiceConnectionStatus.Ready, 20_000); }
-  catch { connection.destroy(); throw new Error('no pude conectarme al canal de voz en 20 s (¿tengo permiso para Ver canal y Conectar?)'); }
+  catch { connection.destroy(); throw Object.assign(new Error('sin conexión de voz en 20 s'), { sinPermiso: true }); }
   connection.on('error', (e) => console.error(`[${hora()}] ERROR conexión:`, e.message));
 
   // Si este canal tiene una sesión interrumpida hace menos de 2 h (caída o Ctrl+C), se continúa y se anota el hueco.
@@ -87,6 +82,7 @@ async function iniciar(canal, canalTexto) {
     latido: setInterval(() => { meta.latido = new Date().toISOString(); guardarMeta(sesion.dir, meta); }, LATIDO_MS),
   };
   await yo.setNickname(APODO).catch((e) => console.error('No pude cambiar mi apodo:', e.message));
+  client.user.setActivity(`#${canal.name}`, { type: ActivityType.Listening }); // "Escuchando #canal" en el perfil
 
   // Patrón recomendado por @discordjs/voice: si se desconecta y no reconecta en 5 s, se da por perdida.
   connection.on(VoiceConnectionStatus.Disconnected, async () => {
@@ -94,14 +90,14 @@ async function iniciar(canal, canalTexto) {
     catch {
       if (actual !== a) return;
       const r = await terminar('desconexion');
-      await canalTexto?.send(`⚠ Taqi se desconectó de <#${canal.id}>. Lo transcrito hasta ahora (${r.frases} frases) quedó guardado; usa /transcribir para continuar la misma acta.`).catch(() => {});
+      await canalTexto?.send({ embeds: [M.desconectado({ canalId: canal.id, frases: r.frases })] }).catch(() => {});
     }
   });
   console.log(`[${hora()}] ${previa ? 'Retomando' : 'Transcribiendo'} "${canal.name}". Sesión: ${sesion.dir}`);
   return a;
 }
 
-// motivo: 'comando' (/terminar) | 'desconexion' | 'cierre' (Ctrl+C o cerrar la ventana) | 'error'
+// motivo: 'comando' (/taqi parar) | 'desconexion' | 'cierre' (Ctrl+C o cerrar la ventana) | 'error'
 async function terminar(motivo) {
   const a = actual;
   if (!a) return null;
@@ -118,8 +114,9 @@ async function terminar(motivo) {
   // Punto de integración futuro con una IA (resumen, etc.; fuera de alcance por ahora): recibiría r.ruta.
   console.log(`[${hora()}] Acta: ${r.ruta} (${r.frases} frases). Descartadas: ${JSON.stringify(a.sesion.descartes)}`);
   await a.canal.guild.members.me.setNickname(a.apodoAnterior).catch(() => {});
-  await a.aviso?.edit(`⚪ Taqi dejó de transcribir <#${a.canal.id}> (${hhmm(a.inicio)}–${hhmm(fin)}).`).catch(() => {});
-  return r;
+  client.user.setPresence({ activities: [] });
+  await a.aviso?.edit({ embeds: [M.terminado({ canalId: a.canal.id, inicio: a.inicio, fin })] }).catch(() => {});
+  return { ...r, minutos: Math.max(1, Math.round((fin - a.inicio) / 60000)) };
 }
 
 // Al arrancar: las sesiones que murieron sin cerrarse reciben su acta. Las de más de 2 h se dan por cerradas.
@@ -137,32 +134,30 @@ client.once(Events.ClientReady, async () => {
   await guild.commands.set(COMANDOS);
   recuperarSesiones();
   if (!(await whisperDisponible())) console.warn('⚠ whisper-server no responde todavía. Arráncalo con: npm run whisper');
-  console.log(`[${hora()}] Conectado como ${client.user.tag}. Comandos /transcribir y /terminar listos en "${guild.name}".`);
+  console.log(`[${hora()}] Conectado como ${client.user.tag}. Comando /taqi listo en "${guild.name}".`);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand() || interaction.guildId !== GUILD_ID) return;
+  if (!interaction.isChatInputCommand() || interaction.guildId !== GUILD_ID || interaction.commandName !== 'taqi') return;
   const canalVoz = interaction.member.voice?.channel;
+  const sub = interaction.options.getSubcommand();
 
-  if (interaction.commandName === 'transcribir') {
-    if (actual) return interaction.reply(efimero(`Ya estoy transcribiendo <#${actual.canal.id}>.`));
-    if (!canalVoz) return interaction.reply(efimero('Entra primero a un canal de voz y vuelve a usar /transcribir.'));
-    if (!(await whisperDisponible())) return interaction.reply(efimero('El motor de transcripción no está corriendo en el PC de Taqi (`npm run whisper`).'));
+  if (sub === 'unirse') {
+    if (actual) return interaction.reply(efimero(M.yaEscuchando(actual.canal.id)));
+    if (!canalVoz) return interaction.reply(efimero(M.sinCanal()));
+    if (!(await whisperDisponible())) return interaction.reply(efimero(M.sinMotor()));
     await interaction.deferReply();
     try { actual = await iniciar(canalVoz, interaction.channel); }
-    catch (e) { return interaction.editReply(`No pude empezar: ${e.message}`); }
-    const retoma = actual.corte ? ` (retomada; se interrumpió de ${hhmm(new Date(actual.corte.desde))} a ${hhmm(new Date(actual.corte.hasta))})` : '';
-    actual.aviso = await interaction.editReply(
-      `🔴 **Taqi está transcribiendo** <#${canalVoz.id}>${retoma}. Lo que se diga queda en un acta escrita; el audio no se guarda. Usa \`/terminar\` para detener.`);
+    catch (e) { return interaction.editReply({ embeds: [e.sinPermiso ? M.sinPermiso() : M.noPude(e.message)] }); }
+    actual.aviso = await interaction.editReply({ embeds: [M.escuchando({ canalId: canalVoz.id, inicio: actual.inicio, corte: actual.corte })] });
   }
 
-  if (interaction.commandName === 'terminar') {
-    if (!actual) return interaction.reply(efimero('No hay ninguna transcripción en curso.'));
-    if (canalVoz?.id !== actual.canal.id) return interaction.reply(efimero(`Tienes que estar en <#${actual.canal.id}> para terminarla.`));
+  if (sub === 'parar') {
+    if (!actual) return interaction.reply(efimero(M.nadaQueParar()));
+    if (canalVoz?.id !== actual.canal.id) return interaction.reply(efimero(M.otroCanal(actual.canal.id)));
     await interaction.deferReply();
     const r = await terminar('comando');
-    if (!r) return interaction.editReply('La transcripción ya había terminado.');
-    await interaction.editReply(`✅ Transcripción terminada: ${r.frases} frases. El acta quedó guardada en el PC donde corre Taqi.`);
+    await interaction.editReply({ embeds: [r ? M.listo(r) : M.yaTermino()] });
   }
 });
 
@@ -170,7 +165,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 client.on(Events.VoiceStateUpdate, (antes, despues) => {
   if (!actual || despues.id === client.user.id) return;
   if (antes.channelId !== actual.canal.id && despues.channelId === actual.canal.id) {
-    actual.canalTexto?.send(`👋 <@${despues.id}>, Taqi está transcribiendo este canal de voz.`).catch(() => {});
+    actual.canalTexto?.send(M.bienvenida(despues.id)).catch(() => {});
   }
 });
 
