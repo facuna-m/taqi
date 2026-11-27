@@ -64,7 +64,7 @@ client.once(Events.ClientReady, async () => {
 
 process.on('SIGINT', async () => {
   console.log(`\n[${hora()}] Terminando: esperando las frases pendientes...`);
-  if (sesion) { await sesion.terminar(); console.log(`Guardado en ${sesion.archivo}`); }
+  if (sesion) { await sesion.terminar(); console.log(`Guardado en ${sesion.archivo}\nDescartadas:`, JSON.stringify(sesion.descartes)); }
   client.destroy();
   process.exit(0);
 });

@@ -24,6 +24,7 @@ const frases = fs.readdirSync(dir)
     sesion.procesarFrase({ userId: nombre, nombre, inicio, pcm48: fs.readFileSync(path.join(dir, f)).subarray(44) });
   }
   await sesion.terminar();
-  const lineas = fs.readFileSync(sesion.archivo, 'utf8').trim().split('\n').length;
+  const lineas = fs.existsSync(sesion.archivo) ? fs.readFileSync(sesion.archivo, 'utf8').trim().split('\n').length : 0;
   console.log(`\n${frases.length} frases -> ${lineas} líneas en ${path.relative(__dirname, sesion.archivo)} (${((performance.now() - t) / 1000).toFixed(1)} s)`);
+  console.log('Descartadas:', JSON.stringify(sesion.descartes));
 })();

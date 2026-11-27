@@ -26,7 +26,7 @@ test('cola en orden, reintento, texto limpio, omite vacías y marca fallos', asy
   const url = `http://127.0.0.1:${server.address().port}/inference`;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'taqi-'));
   const s = crearSesion({ dir, url, reintentos: 1, esperaMs: 10 });
-  const pcm48 = Buffer.alloc(48000 * 4); // 1 s
+  const pcm48 = Buffer.alloc(48000 * 4, 0x0b); // 1 s de tono constante, unos -9 dB: pasa el filtro de volumen
   const inicio = new Date('2026-11-27T03:00:00Z');
 
   const r = await Promise.all([1, 2, 3].map((i) => s.procesarFrase({ userId: `u${i}`, nombre: `N${i}`, inicio, pcm48 })));
@@ -40,5 +40,15 @@ test('cola en orden, reintento, texto limpio, omite vacías y marca fallos', asy
   const lineas = fs.readFileSync(s.archivo, 'utf8').trim().split('\n').map(JSON.parse);
   assert.deepStrictEqual(lineas.map((l) => l.userId), ['u1', 'u3', 'u4']); // la vacía (u2) no se guarda
   assert.strictEqual(lineas[0].duracion, 1);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('el audio silencioso se descarta sin llamar a Whisper', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'taqi-'));
+  const s = crearSesion({ dir, url: 'http://127.0.0.1:9/no-existe', reintentos: 0 });
+  const f = await s.procesarFrase({ userId: 'u', nombre: 'N', inicio: new Date(), pcm48: Buffer.alloc(48000 * 4) });
+  assert.strictEqual(f.descartada, 'volumen bajo');
+  assert.strictEqual(s.descartes['volumen bajo'], 1);
+  assert.ok(!fs.existsSync(s.archivo));
   fs.rmSync(dir, { recursive: true });
 });
