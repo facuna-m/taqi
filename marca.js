@@ -1,15 +1,34 @@
 // Identidad de Taqi en Discord (manual de marca): colores de estado y textos de cada mensaje, con la voz de la marca.
 // Voz: breve, atenta, sin protagonismo, de tú, frases cortas.
+const fs = require('node:fs');
+const path = require('node:path');
 const { EmbedBuilder } = require('discord.js');
 
 // El violeta va en lo neutro; la Lima no se usa porque Discord tiene tema claro y el manual la prohíbe sobre fondos claros.
 const COLOR = { violeta: 0x5B3FD9, grabando: 0xF2545B, inactivo: 0xA391F0, aviso: 0xFFB547 };
 const APODO = '🔴 Taqi · transcribiendo';
+// Emojis de estado (marca/emojis): se suben como emojis de la app al arrancar; hasta entonces, sus equivalentes Unicode.
+const EMOJI = { grabando: '🔴', procesando: '⚪', listo: '✅', aviso: '⚠️' };
+const ESTADO = { grabando: 'grabando', inactivo: 'procesando', violeta: 'listo', aviso: 'aviso' }; // color de tarjeta → emoji
+const DIR_EMOJIS = path.join(__dirname, 'marca', 'emojis');
+
+// Sube los que falten (la versión animada .gif si existe). Para cambiar uno, bórralo en el Developer Portal y reinicia.
+async function cargarEmojis(app) {
+  const subidos = await app.emojis.fetch();
+  for (const estado of Object.keys(EMOJI)) {
+    const name = `taqi_${estado}`;
+    const gif = path.join(DIR_EMOJIS, `${name}.gif`);
+    const e = subidos.find((x) => x.name === name)
+      ?? await app.emojis.create({ name, attachment: fs.existsSync(gif) ? gif : path.join(DIR_EMOJIS, `${name}.png`) });
+    EMOJI[estado] = e.toString();
+  }
+}
+
 const t = (d, estilo = 't') => `<t:${Math.floor(new Date(d).getTime() / 1000)}:${estilo}>`; // Discord la muestra en la hora local de cada uno
 const voces = (n) => `${n} ${n === 1 ? 'voz' : 'voces'}`;
 
 function tarjeta(color, titulo, texto, pie) {
-  const e = new EmbedBuilder().setColor(COLOR[color]).setTitle(titulo);
+  const e = new EmbedBuilder().setColor(COLOR[color]).setTitle(`${EMOJI[ESTADO[color]]} ${titulo}`);
   if (texto) e.setDescription(texto);
   if (pie) e.setFooter({ text: pie });
   return e;
@@ -27,7 +46,7 @@ const MENSAJES = {
     `${minutos} MIN · ${voces(n).toUpperCase()} · ${frases} FRASES · ES`),
   desconectado: ({ canalId, frases }) => tarjeta('aviso', 'Me desconecté del canal',
     `Perdí la conexión con <#${canalId}>. Guardé lo que alcancé a escuchar (${frases} frases).\n\nUsa \`/taqi unirse\` y sigo en la misma acta.`),
-  bienvenida: (userId) => `👋 <@${userId}>, estoy transcribiendo este canal. El audio no se guarda.`,
+  bienvenida: (userId) => `${EMOJI.grabando} <@${userId}>, estoy transcribiendo este canal. El audio no se guarda.`,
   // Errores (solo los ve quien usó el comando)
   yaEscuchando: (canalId) => tarjeta('aviso', 'Ya estoy en otra reunión', `Estoy transcribiendo <#${canalId}>. Solo puedo estar en un canal a la vez.`),
   sinCanal: () => tarjeta('aviso', 'No sé a qué canal ir', 'Entra a un canal de voz y vuelve a usar `/taqi unirse`.'),
@@ -48,4 +67,4 @@ const COMANDOS = [{
   ],
 }];
 
-module.exports = { COLOR, APODO, MENSAJES, COMANDOS };
+module.exports = { COLOR, APODO, EMOJI, MENSAJES, COMANDOS, cargarEmojis };

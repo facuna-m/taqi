@@ -6,7 +6,7 @@ const OpusScript = require('opusscript');
 const { crearSesion, whisperDisponible } = require('./pipeline');
 const { escribirActa } = require('./acta');
 const { guardarMeta, sinCerrar, buscarRetomable, RETOMAR_MS } = require('./sesiones');
-const { APODO, MENSAJES: M, COMANDOS } = require('./marca');
+const { APODO, MENSAJES: M, COMANDOS, cargarEmojis } = require('./marca');
 
 const { DISCORD_TOKEN, GUILD_ID } = process.env;
 if (!DISCORD_TOKEN || !GUILD_ID) {
@@ -132,6 +132,7 @@ function recuperarSesiones() {
 client.once(Events.ClientReady, async () => {
   const guild = await client.guilds.fetch(GUILD_ID);
   await guild.commands.set(COMANDOS);
+  await cargarEmojis(client.application).catch((e) => console.error('No pude cargar los emojis de estado (uso los Unicode):', e.message));
   recuperarSesiones();
   if (!(await whisperDisponible())) console.warn('⚠ whisper-server no responde todavía. Arráncalo con: npm run whisper');
   console.log(`[${hora()}] Conectado como ${client.user.tag}. Comando /taqi listo en "${guild.name}".`);
