@@ -1,0 +1,57 @@
+// Genera acta.md a partir de frases.jsonl (y sesion.json si existe). Se puede regenerar siempre desde el JSONL.
+const fs = require('node:fs');
+const path = require('node:path');
+
+const AGRUPAR_MS = 5000; // frases seguidas de la misma persona con menos de 5 s de pausa van en un mismo párrafo
+const hora = (d) => d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+const fecha = (d) => d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const escapar = (t) => t.replace(/([\\*_`#[\]<>|])/g, '\\$1');
+
+function generarActa({ frases, canal = 'canal de voz', inicio, fin }) {
+  const orden = [...frases].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+  const t0 = inicio ? new Date(inicio) : new Date(orden[0]?.inicio ?? Date.now());
+  const ultima = orden.at(-1);
+  const t1 = fin ? new Date(fin) : ultima ? new Date(new Date(ultima.inicio).getTime() + ultima.duracion * 1000) : t0;
+  const participantes = [...new Set(orden.map((f) => f.nombre))];
+  const minutos = Math.max(1, Math.round((t1 - t0) / 60000));
+
+  const parrafos = [];
+  for (const f of orden) {
+    const t = new Date(f.inicio);
+    const texto = f.texto == null ? '⚠ *(no se pudo transcribir)*' : escapar(f.texto);
+    const prev = parrafos.at(-1);
+    if (prev && prev.nombre === f.nombre && f.texto != null && prev.ok && t - prev.fin < AGRUPAR_MS) {
+      prev.textos.push(texto);
+    } else {
+      parrafos.push({ nombre: f.nombre, t, textos: [texto], ok: f.texto != null });
+    }
+    parrafos.at(-1).fin = new Date(t.getTime() + f.duracion * 1000);
+  }
+
+  return [
+    `# Acta — ${escapar(canal)}`,
+    '',
+    `**Fecha:** ${fecha(t0)} · **Hora:** ${hora(t0).slice(0, 5)}–${hora(t1).slice(0, 5)} (${minutos} min)  `,
+    `**Participantes:** ${participantes.map(escapar).join(', ') || '—'}`,
+    '',
+    '> Transcripción automática local (Whisper). Puede contener errores.',
+    '',
+    '## Transcripción',
+    '',
+    ...(parrafos.length ? parrafos.map((p) => `**[${hora(p.t)}] ${escapar(p.nombre)}:** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
+  ].join('\n');
+}
+
+function escribirActa(dir) {
+  const jsonl = path.join(dir, 'frases.jsonl');
+  const frases = fs.existsSync(jsonl)
+    ? fs.readFileSync(jsonl, 'utf8').split('\n').filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }) // una línea a medio escribir tras una caída se ignora
+    : [];
+  const metaPath = path.join(dir, 'sesion.json');
+  const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
+  const destino = path.join(dir, 'acta.md');
+  fs.writeFileSync(destino, generarActa({ frases, ...meta }));
+  return { ruta: destino, frases: frases.length };
+}
+
+module.exports = { generarActa, escribirActa };
