@@ -5,6 +5,7 @@
   "scripts": {
     "probe": "node --env-file-if-exists=.env probe.js",
     "whisper": "whisper\\bin\\Release\\whisper-server.exe -m whisper/models/ggml-large-v3-turbo.bin -l es --port 8178 -sns",
+    "simular": "node simular.js",
     "test": "node --test"
   },
   "license": "UNLICENSED",
