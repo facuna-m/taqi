@@ -25,9 +25,17 @@ const marcaTiempo = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}_` +
   `${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`;
 
+// Escribe y fuerza a disco: si se corta la luz, la frase ya transcrita no queda solo en el caché de Windows.
+function agregarLinea(archivo, linea) {
+  const fd = fs.openSync(archivo, 'a');
+  try { fs.writeSync(fd, linea); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+
 function crearSesion({ dir = path.join(__dirname, 'sesiones', marcaTiempo()), url = WHISPER_URL, reintentos = 2, esperaMs = 1000, alTranscribir = () => {} } = {}) {
   fs.mkdirSync(dir, { recursive: true });
   const archivo = path.join(dir, 'frases.jsonl');
+  // Al retomar tras una caída, la última línea puede haber quedado cortada: se cierra para no pegarle la siguiente.
+  if (fs.existsSync(archivo) && fs.statSync(archivo).size && !fs.readFileSync(archivo, 'utf8').endsWith('\n')) fs.appendFileSync(archivo, '\n');
   let cola = Promise.resolve(); // una frase a la vez: la GPU es una sola
   const descartes = { 'muy corta': 0, 'volumen bajo': 0, 'alucinación': 0 };
 
@@ -47,7 +55,7 @@ function crearSesion({ dir = path.join(__dirname, 'sesiones', marcaTiempo()), ur
       if (texto) { const limpio = limpiarTexto(texto, duracion); if (!limpio) descartes['alucinación']++; texto = limpio; }
       const frase = { inicio: inicio.toISOString(), userId, nombre, duracion, db, texto, ...(error && { error }) };
       // Si Whisper falla, igual se escribe la línea (texto null) para que el acta marque el hueco.
-      if (texto !== '') { fs.appendFileSync(archivo, JSON.stringify(frase) + '\n'); alTranscribir(frase); }
+      if (texto !== '') { agregarLinea(archivo, JSON.stringify(frase) + '\n'); alTranscribir(frase); }
       return frase;
     });
     cola = tarea.catch(() => {});

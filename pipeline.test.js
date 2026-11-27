@@ -43,6 +43,20 @@ test('cola en orden, reintento, texto limpio, omite vacías y marca fallos', asy
   fs.rmSync(dir, { recursive: true });
 });
 
+test('al retomar, una línea cortada por una caída no se pega a la siguiente', async () => {
+  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => res.end(JSON.stringify({ text: 'nueva' }))); });
+  await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'taqi-'));
+  fs.writeFileSync(path.join(dir, 'frases.jsonl'), '{"texto":"vieja"}\n{"inicio":"2026-');
+  const s = crearSesion({ dir, url: `http://127.0.0.1:${server.address().port}/inference` });
+  await s.procesarFrase({ userId: 'u', nombre: 'N', inicio: new Date(), pcm48: Buffer.alloc(48000 * 4, 0x0b) });
+  server.close();
+  const lineas = fs.readFileSync(s.archivo, 'utf8').split('\n');
+  assert.strictEqual(lineas[1], '{"inicio":"2026-');
+  assert.strictEqual(JSON.parse(lineas[2]).texto, 'nueva');
+  fs.rmSync(dir, { recursive: true });
+});
+
 test('el audio silencioso se descarta sin llamar a Whisper', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'taqi-'));
   const s = crearSesion({ dir, url: 'http://127.0.0.1:9/no-existe', reintentos: 0 });
