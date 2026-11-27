@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Bot de Discord que transcribe reuniones localmente, en español",
   "scripts": {
-    "probe": "node --env-file-if-exists=.env probe.js"
+    "probe": "node --env-file-if-exists=.env probe.js",
+    "test": "node --test"
   },
   "license": "UNLICENSED",
   "type": "commonjs",
