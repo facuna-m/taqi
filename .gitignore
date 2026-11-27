@@ -28,6 +28,9 @@ whisper/
 *.exe
 *.dll
 
+# Documentos internos de planificación
+PLAN.md
+
 # Logs y resúmenes de pruebas
 *.log
 resumen.json
