@@ -7,7 +7,7 @@ const hora = (d) => d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-
 const fecha = (d) => d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const escapar = (t) => t.replace(/([\\*_`#[\]<>|])/g, '\\$1');
 
-function generarActa({ frases, canal = 'canal de voz', inicio, fin }) {
+function generarActa({ frases, canal = 'canal de voz', inicio, fin, cortes = [] }) {
   const orden = [...frases].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
   const t0 = inicio ? new Date(inicio) : new Date(orden[0]?.inicio ?? Date.now());
   const ultima = orden.at(-1);
@@ -27,6 +27,12 @@ function generarActa({ frases, canal = 'canal de voz', inicio, fin }) {
     }
     parrafos.at(-1).fin = new Date(t.getTime() + f.duracion * 1000);
   }
+  for (const c of cortes) {
+    const t = new Date(c.desde);
+    const i = parrafos.findIndex((p) => p.t >= t);
+    const marca = { t, linea: `⚠ *Transcripción interrumpida de ${hora(t)} a ${hora(new Date(c.hasta))} (Taqi se cayó o se reinició).*\n` };
+    parrafos.splice(i === -1 ? parrafos.length : i, 0, marca);
+  }
 
   return [
     `# Acta — ${escapar(canal)}`,
@@ -38,7 +44,7 @@ function generarActa({ frases, canal = 'canal de voz', inicio, fin }) {
     '',
     '## Transcripción',
     '',
-    ...(parrafos.length ? parrafos.map((p) => `**[${hora(p.t)}] ${escapar(p.nombre)}:** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
+    ...(parrafos.length ? parrafos.map((p) => p.linea ?? `**[${hora(p.t)}] ${escapar(p.nombre)}:** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
   ].join('\n');
 }
 

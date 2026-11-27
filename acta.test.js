@@ -27,6 +27,17 @@ test('orden cronológico, agrupación por persona y huecos', () => {
   ]);
 });
 
+test('marca los cortes por caídas en su lugar cronológico', () => {
+  const corte = { desde: new Date(base.getTime() + 10_000).toISOString(), hasta: new Date(base.getTime() + 70_000).toISOString() };
+  const acta = generarActa({ frases: [f(0, 'Ana', 'antes'), f(80, 'Ana', 'después')], cortes: [corte] });
+  const lineas = acta.split('\n').filter((l) => l.startsWith('**[') || l.startsWith('⚠'));
+  assert.deepStrictEqual(lineas, [
+    '**[10:00:00] Ana:** antes',
+    '⚠ *Transcripción interrumpida de 10:00:10 a 10:01:10 (Taqi se cayó o se reinició).*',
+    '**[10:01:20] Ana:** después',
+  ]);
+});
+
 test('escapa Markdown en nombres y textos', () => {
   const acta = generarActa({ frases: [f(0, '[D7D] *Bo*', 'usa `npm` # ya')] });
   assert.match(acta, /\*\*\[10:00:00\] \\\[D7D\\\] \\\*Bo\\\*:\*\* usa \\`npm\\` \\# ya/);
