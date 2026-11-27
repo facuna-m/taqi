@@ -1,0 +1,43 @@
+# Dependencias
+node_modules/
+
+# Secretos: solo se sube la plantilla
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Audio y transcripciones: voces y conversaciones de personas reales, nunca al repo
+probe-out/
+test-audio/
+sesiones/
+*.wav
+*.ogg
+*.opus
+*.mp3
+*.m4a
+*.flac
+*.jsonl
+
+# Whisper: binarios y modelos descargados (cientos de MB)
+whisper/
+*.bin
+*.gguf
+*.zip
+*.exe
+*.dll
+
+# Logs y resúmenes de pruebas
+*.log
+resumen.json
+
+# Configuración local de herramientas
+.claude/settings.local.json
+.vscode/
+.idea/
+
+# Sistema operativo
+Thumbs.db
+Desktop.ini
+.DS_Store
