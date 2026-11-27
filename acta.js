@@ -12,7 +12,12 @@ function relativo(t, t0) {
   const mmss = `${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
   return s >= 3600 ? `${Math.floor(s / 3600)}:${mmss}` : mmss;
 }
-const duracion = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`; };
+// Símbolo de Taqi (versión positiva, para fondo claro) incrustado: el acta sigue siendo un solo archivo.
+// Lo muestran los visores con HTML (VS Code, Obsidian, Typora); GitHub y los visores de texto plano no.
+const SIMBOLO = 'data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" viewBox="10 18 80 64">'
+  + '<g fill="#5B3FD9"><rect x="16" y="36" width="7" height="28" rx="3.5"/><rect x="27" y="24" width="7" height="52" rx="3.5"/><rect x="38" y="32" width="7" height="36" rx="3.5"/></g>'
+  + '<g stroke="#17151F" stroke-width="7" stroke-linecap="round"><line x1="56" y1="36" x2="84" y2="36"/><line x1="56" y1="50" x2="78" y2="50"/><line x1="56" y1="64" x2="70" y2="64"/></g></svg>').toString('base64');
+const duracion =(ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`; };
 
 function generarActa({ frases, canal = 'canal de voz', inicio, fin, cortes = [] }) {
   const orden = [...frases].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
@@ -54,7 +59,7 @@ function generarActa({ frases, canal = 'canal de voz', inicio, fin, cortes = [] 
     '',
     ...(parrafos.length ? parrafos.map((p) => p.linea ?? `\`${relativo(p.t, t0)}\` **${escapar(p.nombre)}** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
     '---',
-    '*Taqi · Tus reuniones, por escrito.*',
+    `<img src="${SIMBOLO}" alt="Taqi" width="28"> *Taqi · Tus reuniones, por escrito.*`,
     '',
   ].join('\n');
 }

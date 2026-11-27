@@ -19,6 +19,7 @@ test('orden cronológico, agrupación por persona y huecos', () => {
   assert.match(acta, /^# Acta — Reuniones/);
   assert.match(acta, /`10 MIN · 2 VOCES · ES`/);
   assert.match(acta, /\*\*Participantes:\*\* Ana, Bea/);
+  assert.match(acta, /^<img src="data:image\/svg\+xml;base64,[A-Za-z0-9+/=]+" alt="Taqi" width="28"> \*Taqi · Tus reuniones, por escrito\.\*$/m);
   assert.deepStrictEqual(etiquetas(acta), [
     '`00:00` **Ana** hola qué tal',
     '`00:20` **Bea** segunda',
