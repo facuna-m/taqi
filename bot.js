@@ -100,7 +100,7 @@ async function terminar() {
   const fin = new Date();
   fs.writeFileSync(path.join(a.sesion.dir, 'sesion.json'), JSON.stringify({ ...a.meta, fin: fin.toISOString() }, null, 2));
   const r = escribirActa(a.sesion.dir);
-  // Aquí se conectaría el resumen automático con IA (fuera de alcance por ahora): enviar r.ruta a la API de Claude.
+  // Punto de integración futuro con una IA (resumen, etc.; fuera de alcance por ahora): recibiría r.ruta.
   console.log(`[${hora()}] Acta: ${r.ruta} (${r.frases} frases). Descartadas: ${JSON.stringify(a.sesion.descartes)}`);
   await a.canal.guild.members.me.setNickname(a.apodoAnterior).catch(() => {});
   await a.aviso?.edit(`⚪ Taqi dejó de transcribir <#${a.canal.id}> (${hhmm(a.inicio)}–${hhmm(fin)}).`).catch(() => {});
