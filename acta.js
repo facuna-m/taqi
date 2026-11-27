@@ -6,6 +6,13 @@ const AGRUPAR_MS = 5000; // frases seguidas de la misma persona con menos de 5 s
 const hora = (d) => d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const fecha = (d) => d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
 const escapar = (t) => t.replace(/([\\*_`#[\]<>|])/g, '\\$1');
+// Etiqueta de hablante del manual de marca: tiempo desde el inicio (00:12, o 1:02:03 pasada la hora).
+function relativo(t, t0) {
+  const s = Math.max(0, Math.round((t - t0) / 1000));
+  const mmss = `${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  return s >= 3600 ? `${Math.floor(s / 3600)}:${mmss}` : mmss;
+}
+const duracion = (ms) => { const s = Math.round(ms / 1000); return s < 60 ? `${s} s` : `${Math.round(s / 60)} min`; };
 
 function generarActa({ frases, canal = 'canal de voz', inicio, fin, cortes = [] }) {
   const orden = [...frases].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
@@ -30,21 +37,25 @@ function generarActa({ frases, canal = 'canal de voz', inicio, fin, cortes = [] 
   for (const c of cortes) {
     const t = new Date(c.desde);
     const i = parrafos.findIndex((p) => p.t >= t);
-    const marca = { t, linea: `⚠ *Transcripción interrumpida de ${hora(t)} a ${hora(new Date(c.hasta))} (Taqi se cayó o se reinició).*\n` };
+    const marca = { t, linea: `\`${relativo(t, t0)}\` ⚠ *Transcripción interrumpida ${duracion(new Date(c.hasta) - t)}, de ${hora(t)} a ${hora(new Date(c.hasta))} (Taqi se cayó o se reinició).*\n` };
     parrafos.splice(i === -1 ? parrafos.length : i, 0, marca);
   }
 
   return [
     `# Acta — ${escapar(canal)}`,
     '',
-    `**Fecha:** ${fecha(t0)} · **Hora:** ${hora(t0).slice(0, 5)}–${hora(t1).slice(0, 5)} (${minutos} min)  `,
+    `**Fecha:** ${fecha(t0)} · **Hora:** ${hora(t0).slice(0, 5)}–${hora(t1).slice(0, 5)}  `,
+    `\`${minutos} MIN · ${participantes.length} ${participantes.length === 1 ? 'VOZ' : 'VOCES'} · ES\`  `,
     `**Participantes:** ${participantes.map(escapar).join(', ') || '—'}`,
     '',
     '> Transcripción automática local (Whisper). Puede contener errores.',
     '',
     '## Transcripción',
     '',
-    ...(parrafos.length ? parrafos.map((p) => p.linea ?? `**[${hora(p.t)}] ${escapar(p.nombre)}:** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
+    ...(parrafos.length ? parrafos.map((p) => p.linea ?? `\`${relativo(p.t, t0)}\` **${escapar(p.nombre)}** ${p.textos.join(' ')}\n`) : ['*(sin frases)*', '']),
+    '---',
+    '*Taqi · Tus reuniones, por escrito.*',
+    '',
   ].join('\n');
 }
 
@@ -57,7 +68,7 @@ function escribirActa(dir) {
   const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, 'utf8')) : {};
   const destino = path.join(dir, 'acta.md');
   fs.writeFileSync(destino, generarActa({ frases, ...meta }));
-  return { ruta: destino, frases: frases.length };
+  return { ruta: destino, frases: frases.length, voces: new Set(frases.map((f) => f.nombre)).size };
 }
 
 module.exports = { generarActa, escribirActa };
